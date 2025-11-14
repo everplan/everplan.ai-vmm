@@ -96,7 +96,7 @@ add_subdirectory(src/memory)
 add_subdirectory(src/backends)
 
 # Python bindings
-if(BUILD_PYTHON_BINDINGS)
+if(BUILD_PYTHON_BINDINGS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/python")
     add_subdirectory(src/python)
 endif()
 

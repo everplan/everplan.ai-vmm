@@ -80,6 +80,8 @@ namespace ai_vmm {
         std::vector<IntelDeviceInfo> discover_intel_devices();
         IntelDeviceInfo create_cpu_device_info();
         std::vector<IntelDeviceInfo> discover_intel_gpus();
+        std::vector<IntelDeviceInfo> discover_intel_gpus_via_pcie();
+        std::string find_drm_device_for_pcie(const std::string& pcie_address);
         std::vector<IntelDeviceInfo> discover_intel_npus();
         
         // Backend capability detection

@@ -57,7 +57,7 @@ public:
         }
     }
     
-    Tensor execute(const Tensor& input) {
+    Tensor execute(const Tensor& input) override {
         if (!backend_) {
             throw std::runtime_error("Backend not available");
         }
@@ -173,6 +173,12 @@ private:
         const DeploymentConstraints& constraints
     ) const;
     ComputeBackend* find_backend_for_device(const DeviceInfo& device) const;
+    
+    // Constraint evaluation helper methods
+    double estimate_device_power(const DeviceInfo& device) const;
+    double estimate_device_latency(const DeviceInfo& device, const ModelMetadata& metadata) const;
+    HardwareType convert_device_type_to_hardware_type(DeviceType device_type) const;
+    bool are_constraints_empty(const DeploymentConstraints& constraints) const;
     
     // New backend management system
     std::unique_ptr<BackendManager> backend_manager_;
@@ -310,8 +316,19 @@ std::unique_ptr<DeployedModel> VMM::Impl::deploy(
                   << ", Memory required: " << metadata.model_size_bytes << " bytes" << std::endl;
     }
     
-    // Step 3: Select optimal device for deployment  
-    DeviceInfo selected_device = backend_manager_->get_best_device_for_model(metadata);
+    // Step 3: Select optimal device for deployment 
+    DeviceInfo selected_device;
+    if (are_constraints_empty(constraints)) {
+        // Use original device selection for basic deployment (Example 1)
+        selected_device = backend_manager_->get_best_device_for_model(metadata);
+        if (debug_mode_) {
+            std::cout << "Using basic device selection (no constraints)" << std::endl;
+        }
+    } else {
+        // Use constraint-aware device selection (Example 2)
+        selected_device = select_best_device(metadata, constraints);
+    }
+    
     if (debug_mode_) {
         std::cout << "Selected device: " << selected_device.name 
                   << " (Type: " << static_cast<int>(selected_device.type) << ")" << std::endl;
@@ -444,6 +461,141 @@ ComputeBackend* VMM::Impl::find_backend_for_device(const DeviceInfo& device) con
     return nullptr;
 }
 
+DeviceInfo VMM::Impl::select_best_device(
+    const ModelMetadata& model_metadata,
+    const DeploymentConstraints& constraints
+) const {
+    auto all_devices = backend_manager_->discover_all_devices();
+    
+    if (all_devices.empty()) {
+        return DeviceInfo{}; // Return empty device if none available
+    }
+    
+    if (debug_mode_) {
+        std::cout << "Selecting device with constraints:" << std::endl;
+        std::cout << "  - Max latency: " << constraints.max_latency_ms << "ms" << std::endl;
+        std::cout << "  - Power budget: " << constraints.power_budget_watts << "W" << std::endl;
+        std::cout << "  - Preferred hardware types: " << constraints.preferred_hardware.size() << " types" << std::endl;
+    }
+    
+    DeviceInfo best_device;
+    double best_score = -1.0;
+    
+    for (const auto& device : all_devices) {
+        if (backend_manager_->is_device_busy(device)) {
+            continue; // Skip busy devices
+        }
+        
+        double score = 0.0;
+        
+        // 1. Check hardware type preference (major boost)
+        bool is_preferred = constraints.preferred_hardware.empty(); // If no preferences, all are acceptable
+        for (const auto& preferred_type : constraints.preferred_hardware) {
+            HardwareType device_hardware_type = convert_device_type_to_hardware_type(device.type);
+            if (device_hardware_type == preferred_type) {
+                is_preferred = true;
+                score += 50.0; // Significant boost for preferred hardware
+                break;
+            }
+        }
+        
+        if (!is_preferred && !constraints.preferred_hardware.empty()) {
+            score -= 30.0; // Penalty for non-preferred hardware
+        }
+        
+        // 2. Estimate performance score (memory and compute capacity)
+        score += backend_manager_->score_device_for_model(model_metadata, device);
+        
+        // 3. Apply power budget constraint
+        if (constraints.power_budget_watts > 0) {
+            double estimated_power = estimate_device_power(device);
+            if (estimated_power <= constraints.power_budget_watts) {
+                score += 10.0; // Bonus for staying within power budget
+            } else {
+                score -= (estimated_power - constraints.power_budget_watts) * 2.0; // Penalty for exceeding budget
+            }
+        }
+        
+        // 4. Apply latency constraint (rough estimation)
+        if (constraints.max_latency_ms > 0) {
+            double estimated_latency = estimate_device_latency(device, model_metadata);
+            if (estimated_latency <= constraints.max_latency_ms) {
+                score += 15.0; // Bonus for meeting latency requirements
+            } else {
+                score -= (estimated_latency - constraints.max_latency_ms) * 0.5; // Penalty for exceeding latency
+            }
+        }
+        
+        if (debug_mode_) {
+            std::cout << "  - Device: " << device.name 
+                      << " (Type: " << static_cast<int>(device.type) 
+                      << ") Score: " << score << std::endl;
+        }
+        
+        if (score > best_score) {
+            best_score = score;
+            best_device = device;
+        }
+    }
+    
+    if (debug_mode_ && !best_device.name.empty()) {
+        std::cout << "Selected device: " << best_device.name 
+                  << " with score: " << best_score << std::endl;
+    }
+    
+    return best_device;
+}
+
+// Helper methods for constraint evaluation
+double VMM::Impl::estimate_device_power(const DeviceInfo& device) const {
+    // Rough power estimates based on device type
+    switch (device.type) {
+        case DeviceType::CPU: return 65.0; // Typical CPU power
+        case DeviceType::INTEL_ARC: return 120.0; // Discrete GPU power
+        case DeviceType::INTEL_NPU: return 15.0; // Low power NPU
+        case DeviceType::NVIDIA_GPU: return 200.0; // High-end GPU power
+        default: return 50.0;
+    }
+}
+
+double VMM::Impl::estimate_device_latency(const DeviceInfo& device, const ModelMetadata& metadata) const {
+    // Rough latency estimates based on device type and model size
+    double base_latency = 100.0; // Base latency in ms
+    double size_factor = metadata.model_size_bytes / (1024.0 * 1024.0); // Size in MB
+    
+    switch (device.type) {
+        case DeviceType::CPU: 
+            return base_latency + size_factor * 2.0; // Slower for large models
+        case DeviceType::INTEL_ARC: 
+            return base_latency * 0.7 + size_factor * 0.5; // Faster inference
+        case DeviceType::INTEL_NPU: 
+            return base_latency * 0.8 + size_factor * 0.3; // Optimized for AI
+        case DeviceType::NVIDIA_GPU: 
+            return base_latency * 0.5 + size_factor * 0.3; // Fastest option
+        default: 
+            return base_latency + size_factor * 1.0;
+    }
+}
+
+bool VMM::Impl::are_constraints_empty(const DeploymentConstraints& constraints) const {
+    return constraints.max_latency_ms == 0 && 
+           constraints.power_budget_watts == 0 &&
+           constraints.preferred_hardware.empty() &&
+           constraints.min_precision == Precision::FP32; // Default precision
+}
+
+HardwareType VMM::Impl::convert_device_type_to_hardware_type(DeviceType device_type) const {
+    switch (device_type) {
+        case DeviceType::CPU: return HardwareType::CPU;
+        case DeviceType::INTEL_IGPU: return HardwareType::INTEL_IGPU;
+        case DeviceType::INTEL_ARC: return HardwareType::INTEL_ARC;
+        case DeviceType::INTEL_NPU: return HardwareType::INTEL_NPU;
+        case DeviceType::NVIDIA_GPU: return HardwareType::NVIDIA_GPU;
+        case DeviceType::AMD_GPU: return HardwareType::AMD_GPU;
+        default: return HardwareType::UNKNOWN;
+    }
+}
+
 std::unique_ptr<DeployedModel> VMM::Impl::deploy_from_hub(
     const std::string& model_name,
     const DeploymentConstraints& constraints
@@ -531,8 +683,23 @@ DeployedModel::DeployedModel(std::shared_ptr<Model> model, std::shared_ptr<Compu
 }
 
 Tensor DeployedModel::execute(const Tensor& input) {
-    // TODO: Implement synchronous execution
-    throw std::runtime_error("Execution not yet implemented");
+    if (!backend_) {
+        throw std::runtime_error("Backend not available for execution");
+    }
+    
+    // Create execution context
+    ExecutionContext context;
+    context.input_tensors = {input};
+    context.execution_precision = input.precision;
+    
+    // Execute inference on the backend
+    bool success = backend_->execute_inference(context);
+    
+    if (!success || context.output_tensors.empty()) {
+        throw std::runtime_error("Inference execution failed");
+    }
+    
+    return context.output_tensors[0];
 }
 
 std::future<Tensor> DeployedModel::execute_async(const Tensor& input) {

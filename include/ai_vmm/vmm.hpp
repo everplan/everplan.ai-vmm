@@ -27,14 +27,14 @@ public:
      * @param input Input tensor
      * @return Output tensor
      */
-    Tensor execute(const Tensor& input);
+    virtual Tensor execute(const Tensor& input);
     
     /**
      * @brief Execute inference asynchronously
      * @param input Input tensor
      * @return Future containing output tensor
      */
-    std::future<Tensor> execute_async(const Tensor& input);
+    virtual std::future<Tensor> execute_async(const Tensor& input);
     
     /**
      * @brief Get execution statistics from last run

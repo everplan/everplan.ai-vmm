@@ -21,31 +21,36 @@ namespace ai_vmm {
     }
 
     bool BackendManager::initialize() {
-        std::lock_guard<std::mutex> lock(backends_mutex_);
-        
-        if (initialized_) {
-            return true;
+        {
+            std::lock_guard<std::mutex> lock(backends_mutex_);
+            if (initialized_) {
+                return true;
+            }
         }
 
         std::cout << "[BackendManager] Initializing backend manager..." << std::endl;
 
         // Auto-discover and initialize available backends
+        // This is done WITHOUT holding the mutex to avoid deadlock when register_backend() is called
         auto_discover_backends();
 
         // Initialize all registered backends
-        for (auto& [name, backend] : backends_) {
-            std::cout << "[BackendManager] Initializing backend: " << name << std::endl;
-            if (!backend->initialize()) {
-                std::cerr << "[BackendManager] Failed to initialize backend: " << name << std::endl;
-            } else {
-                std::cout << "[BackendManager] Successfully initialized backend: " << name 
-                         << " (version " << backend->get_version() << ")" << std::endl;
+        {
+            std::lock_guard<std::mutex> lock(backends_mutex_);
+            for (auto& [name, backend] : backends_) {
+                std::cout << "[BackendManager] Initializing backend: " << name << std::endl;
+                if (!backend->initialize()) {
+                    std::cerr << "[BackendManager] Failed to initialize backend: " << name << std::endl;
+                } else {
+                    std::cout << "[BackendManager] Successfully initialized backend: " << name 
+                             << " (version " << backend->get_version() << ")" << std::endl;
+                }
             }
-        }
 
-        initialized_ = true;
-        std::cout << "[BackendManager] Backend manager initialized with " 
-                  << backends_.size() << " backends" << std::endl;
+            initialized_ = true;
+            std::cout << "[BackendManager] Backend manager initialized with " 
+                      << backends_.size() << " backends" << std::endl;
+        }
         
         return true;
     }
@@ -73,15 +78,31 @@ namespace ai_vmm {
     }
 
     bool BackendManager::register_backend(const std::string& name, std::unique_ptr<ComputeBackend> backend) {
+        std::cout << "[BackendManager] [DEBUG] Entering register_backend for: " << name << std::endl;
+        std::cout.flush();
+        
         std::lock_guard<std::mutex> lock(backends_mutex_);
+        std::cout << "[BackendManager] [DEBUG] Acquired backends_mutex for: " << name << std::endl;
+        std::cout.flush();
         
         if (backends_.find(name) != backends_.end()) {
             std::cerr << "[BackendManager] Backend already registered: " << name << std::endl;
             return false;
         }
 
+        std::cout << "[BackendManager] [DEBUG] About to move backend into backends_ map for: " << name << std::endl;
+        std::cout.flush();
+        
         backends_[name] = std::move(backend);
+        
+        std::cout << "[BackendManager] [DEBUG] Successfully moved backend into map for: " << name << std::endl;
+        std::cout.flush();
+        
         std::cout << "[BackendManager] Registered backend: " << name << std::endl;
+        
+        std::cout << "[BackendManager] [DEBUG] Exiting register_backend for: " << name << std::endl;
+        std::cout.flush();
+        
         return true;
     }
 
@@ -303,42 +324,15 @@ namespace ai_vmm {
                       << creation_duration.count() << "ms" << std::endl;
             
             if (intel_backend) {
-                std::cout << "[BackendManager] Backend created successfully, attempting registration with timeout..." << std::endl;
-                std::cout.flush();
+                std::cout << "[BackendManager] Backend created successfully, attempting registration..." << std::endl;
                 
-                // Use timeout-based registration to prevent hanging
-                bool registration_success = false;
+                // Register backend directly - deadlock issue fixed by proper mutex management
+                bool registration_success = register_backend("intel", std::move(intel_backend));
                 
-                try {
-                    std::packaged_task<bool()> registration_task([&]() {
-                        return register_backend("intel", std::move(intel_backend));
-                    });
-                    
-                    auto registration_future = registration_task.get_future();
-                    std::thread registration_thread(std::move(registration_task));
-                    
-                    auto status = registration_future.wait_for(std::chrono::seconds(5));
-                    
-                    if (status == std::future_status::ready) {
-                        registration_success = registration_future.get();
-                        registration_thread.join();
-                        
-                        if (registration_success) {
-                            std::cout << "[BackendManager] Successfully registered Intel backend" << std::endl;
-                        } else {
-                            std::cerr << "[BackendManager] Failed to register Intel backend" << std::endl;
-                        }
-                    } else {
-                        std::cerr << "[BackendManager] Intel backend registration timed out after 5 seconds" << std::endl;
-                        std::cerr << "[BackendManager] Deadlock detected - skipping Intel backend registration" << std::endl;
-                        
-                        // Detach the hanging thread to prevent termination issues
-                        registration_thread.detach();
-                    }
-                } catch (const std::exception& e) {
-                    std::cerr << "[BackendManager] Exception during Intel backend registration: " << e.what() << std::endl;
-                } catch (...) {
-                    std::cerr << "[BackendManager] Unknown exception during Intel backend registration" << std::endl;
+                if (registration_success) {
+                    std::cout << "[BackendManager] Successfully registered Intel backend" << std::endl;
+                } else {
+                    std::cerr << "[BackendManager] Failed to register Intel backend" << std::endl;
                 }
             } else {
                 std::cout << "[BackendManager] Intel backend creation returned null" << std::endl;

@@ -45,6 +45,9 @@ namespace ai_vmm {
         void set_optimization_level(int level);
         void enable_profiling(bool enable);
         std::string get_performance_summary();
+        
+        // Device scoring for model placement (made public for constraint evaluation)
+        double score_device_for_model(const ModelMetadata& model, const DeviceInfo& device);
 
     private:
         mutable std::mutex backends_mutex_;
@@ -58,9 +61,6 @@ namespace ai_vmm {
 
         // Auto-discovery of available backends
         void auto_discover_backends();
-        
-        // Device scoring for model placement
-        double score_device_for_model(const ModelMetadata& model, const DeviceInfo& device);
         
         // Utility functions
         std::string device_to_key(const DeviceInfo& device) const;
