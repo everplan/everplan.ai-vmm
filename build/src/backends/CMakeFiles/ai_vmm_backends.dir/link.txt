@@ -1,2 +1,0 @@
-/usr/bin/ar qc libai_vmm_backends.a CMakeFiles/ai_vmm_backends.dir/compute_backend.cpp.o CMakeFiles/ai_vmm_backends.dir/backend_manager.cpp.o CMakeFiles/ai_vmm_backends.dir/intel_backend.cpp.o
-/usr/bin/ranlib libai_vmm_backends.a

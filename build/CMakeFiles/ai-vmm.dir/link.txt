@@ -1,2 +1,0 @@
-/usr/bin/ar qc libai-vmm.a src/core/CMakeFiles/ai_vmm_core.dir/vmm.cpp.o src/core/CMakeFiles/ai_vmm_core.dir/model.cpp.o src/core/CMakeFiles/ai_vmm_core.dir/hardware_discovery.cpp.o src/hal/CMakeFiles/ai_vmm_hal.dir/backend_registry.cpp.o src/optimization/CMakeFiles/ai_vmm_optimization.dir/model_optimizer.cpp.o src/scheduling/CMakeFiles/ai_vmm_scheduling.dir/workload_scheduler.cpp.o src/memory/CMakeFiles/ai_vmm_memory.dir/memory_manager.cpp.o
-/usr/bin/ranlib libai-vmm.a
