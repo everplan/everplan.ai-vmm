@@ -1,5 +1,13 @@
 # AI VMM Architecture
 
+## 🚀 Current Status (November 2025)
+
+**Development Status**: Core VMM Functional, Hardware Discovery Investigation Required  
+**Test Results**: 18/18 Core Tests Passing (100% Success Rate)  
+**Production Readiness**: Core architecture ready, hardware discovery needs backend registration fix  
+
+> 📋 **Detailed Status Report**: See [HARDWARE_DISCOVERY_STATUS.md](./HARDWARE_DISCOVERY_STATUS.md) for complete analysis of current capabilities and known issues.
+
 ## Overview
 
 The AI Virtual Machine Manager (VMM) is designed as a universal AI accelerator abstraction layer that enables seamless deployment of machine learning models across heterogeneous hardware platforms. The architecture prioritizes performance, extensibility, and developer experience while maintaining vendor neutrality.
