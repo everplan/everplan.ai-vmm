@@ -5,6 +5,8 @@
 #include <numeric>
 #include <chrono>
 #include <cstdlib>
+#include <future>
+#include <thread>
 
 namespace ai_vmm {
 
@@ -288,7 +290,7 @@ namespace ai_vmm {
             return;
         }
         
-        // Re-enable Intel backend registration with enhanced error handling
+        // Re-enable Intel backend registration with enhanced error handling and timeout protection
         try {
             std::cout << "[BackendManager] Attempting to create Intel backend..." << std::endl;
             
@@ -301,13 +303,42 @@ namespace ai_vmm {
                       << creation_duration.count() << "ms" << std::endl;
             
             if (intel_backend) {
-                std::cout << "[BackendManager] Backend created successfully, attempting registration..." << std::endl;
-                std::cout.flush(); // Force output before potential hang
+                std::cout << "[BackendManager] Backend created successfully, attempting registration with timeout..." << std::endl;
+                std::cout.flush();
                 
-                if (register_backend("intel", std::move(intel_backend))) {
-                    std::cout << "[BackendManager] Successfully registered Intel backend" << std::endl;
-                } else {
-                    std::cerr << "[BackendManager] Failed to register Intel backend" << std::endl;
+                // Use timeout-based registration to prevent hanging
+                bool registration_success = false;
+                
+                try {
+                    std::packaged_task<bool()> registration_task([&]() {
+                        return register_backend("intel", std::move(intel_backend));
+                    });
+                    
+                    auto registration_future = registration_task.get_future();
+                    std::thread registration_thread(std::move(registration_task));
+                    
+                    auto status = registration_future.wait_for(std::chrono::seconds(5));
+                    
+                    if (status == std::future_status::ready) {
+                        registration_success = registration_future.get();
+                        registration_thread.join();
+                        
+                        if (registration_success) {
+                            std::cout << "[BackendManager] Successfully registered Intel backend" << std::endl;
+                        } else {
+                            std::cerr << "[BackendManager] Failed to register Intel backend" << std::endl;
+                        }
+                    } else {
+                        std::cerr << "[BackendManager] Intel backend registration timed out after 5 seconds" << std::endl;
+                        std::cerr << "[BackendManager] Deadlock detected - skipping Intel backend registration" << std::endl;
+                        
+                        // Detach the hanging thread to prevent termination issues
+                        registration_thread.detach();
+                    }
+                } catch (const std::exception& e) {
+                    std::cerr << "[BackendManager] Exception during Intel backend registration: " << e.what() << std::endl;
+                } catch (...) {
+                    std::cerr << "[BackendManager] Unknown exception during Intel backend registration" << std::endl;
                 }
             } else {
                 std::cout << "[BackendManager] Intel backend creation returned null" << std::endl;
