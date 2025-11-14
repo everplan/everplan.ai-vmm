@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/ai_vmm_basic_example.dir/main.cpp.o -o ai_vmm_basic_example  ../../libai-vmm.a ../../src/backends/libai_vmm_backends.a -lpthread -ldl 

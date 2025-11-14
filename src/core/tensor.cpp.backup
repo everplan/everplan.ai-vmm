@@ -1,0 +1,71 @@
+#include <ai_vmm/vmm.hpp>
+#include <stdexcept>
+#include <cstring>
+#include <iostream>
+
+namespace ai_vmm {
+
+namespace {
+    size_t get_precision_size(Precision precision) {
+        switch (precision) {
+            case Precision::FP32: return 4;
+            case Precision::FP16: return 2;
+            case Precision::BF16: return 2;
+            case Precision::INT8: return 1;
+            case Precision::INT4: return 1; // Packed, but minimum 1 byte
+            case Precision::FP8: return 1;
+            default: return 4;
+        }
+    }
+}
+
+Tensor::Tensor(const std::vector<size_t>& shape, Precision precision)
+    : shape_(shape), precision_(precision) {
+    
+    size_t total_bytes = byte_size();
+    if (total_bytes > 0) {
+        data_ = std::shared_ptr<void>(
+            aligned_alloc(32, total_bytes),  // 32-byte alignment for vectorization
+            [](void* p) { free(p); }
+        );
+        
+        if (!data_) {
+            throw std::bad_alloc();
+        }
+        
+        // Initialize to zero
+        std::memset(data_.get(), 0, total_bytes);
+    }
+}
+
+Tensor::Tensor(void* data, const std::vector<size_t>& shape, Precision precision)
+    : shape_(shape), precision_(precision) {
+    
+    size_t total_bytes = byte_size();
+    if (total_bytes > 0 && data != nullptr) {
+        data_ = std::shared_ptr<void>(
+            aligned_alloc(32, total_bytes),
+            [](void* p) { free(p); }
+        );
+        
+        if (!data_) {
+            throw std::bad_alloc();
+        }
+        
+        std::memcpy(data_.get(), data, total_bytes);
+    }
+}
+
+size_t Tensor::size() const {
+    size_t total = 1;
+    for (size_t dim : shape_) {
+        total *= dim;
+    }
+    return total;
+}
+
+size_t Tensor::byte_size() const {
+    return size() * get_precision_size(precision_);
+}
+
+} // namespace ai_vmm
