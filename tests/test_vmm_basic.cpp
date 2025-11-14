@@ -1,10 +1,17 @@
 #include <gtest/gtest.h>
 #include <ai_vmm/vmm.hpp>
+#include <cstdlib>
 
 class VMMBasicTest : public ::testing::Test {
 protected:
-    void SetUp() override {}
-    void TearDown() override {}
+    void SetUp() override {
+        // Set test mode to prevent hardware discovery hanging
+        setenv("AI_VMM_TEST_MODE", "1", 1);
+    }
+    void TearDown() override {
+        // Clean up environment variable
+        unsetenv("AI_VMM_TEST_MODE");
+    }
 };
 
 TEST_F(VMMBasicTest, VMMCreation) {

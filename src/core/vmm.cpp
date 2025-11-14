@@ -158,7 +158,7 @@ void VMM::Impl::discover_hardware() {
     // Convert new DeviceInfo to legacy HardwareTarget format
     available_hardware_.clear();
     for (const auto& device : devices) {
-        HardwareTarget hw_target;
+        HardwareTarget hw_target(HardwareType::UNKNOWN, "Unknown");
         
         // Convert DeviceType to HardwareType
         switch (device.type) {
@@ -169,7 +169,7 @@ void VMM::Impl::discover_hardware() {
                 hw_target = HardwareTarget(HardwareType::INTEL_IGPU, device.name);
                 break;
             case DeviceType::INTEL_ARC:
-                hw_target = HardwareTarget(HardwareType::INTEL_GPU, device.name);
+                hw_target = HardwareTarget(HardwareType::INTEL_ARC, device.name);
                 break;
             case DeviceType::INTEL_NPU:
                 hw_target = HardwareTarget(HardwareType::INTEL_NPU, device.name);
@@ -250,18 +250,6 @@ void VMM::Impl::set_debug_mode(bool enable) {
     if (enable) {
         std::cout << "AI VMM debug mode enabled" << std::endl;
     }
-}
-
-std::shared_ptr<ComputeBackend> VMM::Impl::select_backend(
-    const ModelCategory& category,
-    const DeploymentConstraints& constraints
-) const {
-    // TODO: Implement intelligent backend selection
-    if (backends_.empty()) {
-        throw std::runtime_error("No backends available");
-    }
-    
-    return backends_[0];
 }
 
 // VMM public interface implementation

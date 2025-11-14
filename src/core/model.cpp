@@ -1,4 +1,5 @@
-#include <ai_vmm/compute_backend.hpp>
+#include <ai_vmm/backends/compute_backend.hpp>
+#include <ai_vmm/types.hpp>
 #include <stdexcept>
 
 namespace ai_vmm {

@@ -22,6 +22,7 @@ namespace ai_vmm {
             case Precision::BF16: bytes_per_element = 2; break;
             case Precision::INT8: bytes_per_element = 1; break;
             case Precision::INT4: bytes_per_element = 1; break; // Packed, actual is 0.5
+            case Precision::FP8: bytes_per_element = 1; break;
         }
         
         return element_count * bytes_per_element;

@@ -66,10 +66,27 @@ namespace ai_vmm {
         MemoryAllocation memory;
         size_t stride_bytes;
         
+        // Constructors
+        Tensor() : precision(Precision::FP32), stride_bytes(0) {
+            shape = {1}; // Default to scalar
+        }
+        
+        Tensor(const std::vector<int64_t>& s, Precision p) 
+            : shape(s), precision(p), stride_bytes(0) {
+            // For now, just initialize without memory allocation
+            // Real allocation would happen via backend
+        }
+        
         // Utility methods
         size_t total_elements() const;
         size_t size_bytes() const;
         bool is_valid() const { return memory.ptr != nullptr; }
+        
+        // Compatibility methods for tests - return shape and precision as values, not methods
+        size_t size() const { return total_elements(); }
+        size_t byte_size() const { return size_bytes(); }
+        void* data() { return memory.ptr; }
+        const void* data() const { return memory.ptr; }
     };
 
     // Model metadata for deployment decisions

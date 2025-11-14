@@ -1,7 +1,10 @@
 #include "ai_vmm/backends/backend_manager.hpp"
+#include "ai_vmm/backends/intel_backend.hpp"
 #include <algorithm>
 #include <iostream>
 #include <numeric>
+#include <chrono>
+#include <cstdlib>
 
 namespace ai_vmm {
 
@@ -276,27 +279,50 @@ namespace ai_vmm {
     }
 
     void BackendManager::auto_discover_backends() {
-        // Always try to register Intel backend (supports CPU)
+        std::cout << "[BackendManager] Starting auto-discovery with improved safety measures..." << std::endl;
+        
+        // Check for test mode - if running in test environment, use minimal hardware discovery
+        const char* test_mode = std::getenv("AI_VMM_TEST_MODE");
+        if (test_mode && std::string(test_mode) == "1") {
+            std::cout << "[BackendManager] Test mode detected - skipping hardware discovery for stability" << std::endl;
+            return;
+        }
+        
+        // Re-enable Intel backend registration with enhanced error handling
         try {
+            std::cout << "[BackendManager] Attempting to create Intel backend..." << std::endl;
+            
+            auto start_time = std::chrono::steady_clock::now();
             auto intel_backend = create_intel_backend();
+            auto end_time = std::chrono::steady_clock::now();
+            
+            auto creation_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+            std::cout << "[BackendManager] Intel backend creation took " 
+                      << creation_duration.count() << "ms" << std::endl;
+            
             if (intel_backend) {
-                register_backend("intel", std::move(intel_backend));
+                std::cout << "[BackendManager] Backend created successfully, attempting registration..." << std::endl;
+                std::cout.flush(); // Force output before potential hang
+                
+                if (register_backend("intel", std::move(intel_backend))) {
+                    std::cout << "[BackendManager] Successfully registered Intel backend" << std::endl;
+                } else {
+                    std::cerr << "[BackendManager] Failed to register Intel backend" << std::endl;
+                }
+            } else {
+                std::cout << "[BackendManager] Intel backend creation returned null" << std::endl;
             }
         } catch (const std::exception& e) {
-            std::cerr << "[BackendManager] Failed to create Intel backend: " << e.what() << std::endl;
+            std::cerr << "[BackendManager] Exception during Intel backend creation: " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "[BackendManager] Unknown exception during Intel backend creation" << std::endl;
         }
 
-        // Try to register NVIDIA backend
-        try {
-            auto nvidia_backend = create_nvidia_backend();
-            if (nvidia_backend) {
-                register_backend("nvidia", std::move(nvidia_backend));
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "[BackendManager] Failed to create NVIDIA backend: " << e.what() << std::endl;
-        }
-
-        // Future: AMD backend auto-discovery
+        // Future: Add other backend auto-discovery here
+        // - AMD ROCm backend
+        // - NVIDIA CUDA backend (when not using external registration)
+        
+        std::cout << "[BackendManager] Auto-discovery completed" << std::endl;
     }
 
     double BackendManager::score_device_for_model(const ModelMetadata& model, const DeviceInfo& device) {

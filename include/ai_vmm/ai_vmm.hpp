@@ -2,7 +2,7 @@
 
 // Main include file for AI VMM
 #include "types.hpp"
-#include "compute_backend.hpp"
+#include "backends/compute_backend.hpp"
 #include "vmm.hpp"
 
 /**

@@ -23,7 +23,8 @@ class ExecutionPlan;
  */
 enum class HardwareType {
     CPU,           ///< Intel/AMD CPUs
-    INTEL_GPU,     ///< Intel Integrated Graphics
+    INTEL_GPU,     ///< Intel Integrated Graphics (legacy name)
+    INTEL_IGPU,    ///< Intel Integrated Graphics
     INTEL_ARC,     ///< Intel ARC Discrete GPU
     INTEL_NPU,     ///< Intel NPU (AI Accelerator)
     NVIDIA_GPU,    ///< NVIDIA CUDA devices
