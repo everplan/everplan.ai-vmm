@@ -57,6 +57,24 @@ The AI VMM provides a unified interface for deploying any AI model (LLMs, CNNs, 
 
 ## Quick Start
 
+### Web Interface (Recommended)
+
+```bash
+# Start the web dashboard
+cd /root/everplan.ai-vmm/web
+python3 vmm_api.py
+
+# Open browser to http://localhost:8000
+```
+
+Features:
+- 🖼️ **Image Inference**: Upload images for object detection (YOLOv8) or classification (MobileNetV2)
+- 📊 **Performance Benchmark**: Compare CPU vs GPU acceleration (3x speedup on Intel Battlemage!)
+- ℹ️ **VMM Information**: View runtime backend support and hardware capabilities
+- 📁 **Example Images**: Test with images from `examples/images/` folder
+
+### Python API (Future)
+
 ```python
 from ai_vmm import VMM
 
@@ -79,6 +97,19 @@ model = vmm.deploy(
     }
 )
 ```
+
+## Models & Examples
+
+### Available Models
+- **YOLOv8n** (13 MB) - Object detection, ~3x faster on GPU
+- **MobileNetV2** (14 MB) - Image classification
+
+### Example Images
+See `examples/images/` folder for test images including:
+- `zidane.jpg` - Soccer players (person + tie detection)
+- `bus.jpg` - Street scene (vehicle + person detection)
+
+Add your own images to test with different models!
 
 ## Technical Stack
 
