@@ -388,9 +388,19 @@
             <!-- Inference Playground Card -->
             <div class="card">
                 <h2>🎯 Inference Playground</h2>
+                <p style="color: #666; font-size: 0.9em; margin-bottom: 15px;">
+                    <strong>AI-VMM supports ALL model types</strong> - not just LLMs like Ollama.
+                    Test classification, detection, and more on heterogeneous hardware.
+                </p>
                 <select id="modelSelect">
-                    <option value="mobilenetv2">MobileNetV2 (Classification)</option>
-                    <option value="yolov8n">YOLOv8n (Object Detection)</option>
+                    <optgroup label="📸 Image Classification">
+                        <option value="mobilenetv2">MobileNetV2 (14MB) - Lightweight</option>
+                        <option value="resnet50">ResNet50 (98MB) - High Accuracy</option>
+                    </optgroup>
+                    <optgroup label="🎯 Object Detection">
+                        <option value="yolov8n">YOLOv8n (13MB) - Real-time</option>
+                        <option value="ssd_mobilenet">SSD MobileNet (28MB) - Alternative</option>
+                    </optgroup>
                 </select>
                 <select id="deviceSelect">
                     <option value="auto">Auto (VMM selects best)</option>
