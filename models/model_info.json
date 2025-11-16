@@ -1,0 +1,42 @@
+{
+  "mobilenetv2": {
+    "name": "MobileNetV2",
+    "type": "classification",
+    "task": "Image Classification",
+    "input_size": [224, 224],
+    "classes": 1000,
+    "class_labels": "imagenet_classes.json",
+    "description": "Lightweight image classifier (14MB), optimized for mobile devices",
+    "use_case": "General image recognition - animals, objects, scenes"
+  },
+  "resnet50": {
+    "name": "ResNet50",
+    "type": "classification",
+    "task": "Image Classification",
+    "input_size": [224, 224],
+    "classes": 1000,
+    "class_labels": "imagenet_classes.json",
+    "description": "Deep residual network (98MB), high accuracy classification",
+    "use_case": "Detailed image recognition with better accuracy than MobileNet"
+  },
+  "yolov8n": {
+    "name": "YOLOv8n",
+    "type": "detection",
+    "task": "Object Detection",
+    "input_size": [640, 640],
+    "classes": 80,
+    "class_labels": "coco_classes.json",
+    "description": "Real-time object detection (13MB), fastest YOLO variant",
+    "use_case": "Detect multiple objects with bounding boxes - people, vehicles, animals"
+  },
+  "ssd_mobilenet": {
+    "name": "SSD MobileNet",
+    "type": "detection",
+    "task": "Object Detection",
+    "input_size": [300, 300],
+    "classes": 90,
+    "class_labels": "coco_classes.json",
+    "description": "Single Shot Detector (28MB), efficient object localization",
+    "use_case": "Alternative detection architecture, good for embedded devices"
+  }
+}

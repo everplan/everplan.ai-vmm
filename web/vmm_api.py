@@ -335,6 +335,20 @@ async def list_models():
     return get_available_models()
 
 
+@app.get("/api/model-info/{model_name}")
+async def get_model_metadata(model_name: str):
+    """Get detailed metadata for a specific model"""
+    model_info_path = Path(__file__).parent.parent / "models" / "model_info.json"
+    
+    if model_info_path.exists():
+        with open(model_info_path, 'r') as f:
+            all_models = json.load(f)
+            if model_name in all_models:
+                return all_models[model_name]
+    
+    raise HTTPException(status_code=404, detail=f"Model metadata not found for: {model_name}")
+
+
 @app.post("/api/infer")
 async def run_inference(
     image: UploadFile = File(...), 
@@ -391,6 +405,7 @@ async def run_inference(
                         latency_ms=round(latency_ms, 2),
                         device_used=device_used,
                         results={
+                            "type": "detection",
                             "detections": detections,
                             "count": len(detections),
                             "model": "YOLOv8n"
@@ -401,54 +416,61 @@ async def run_inference(
             except json.JSONDecodeError:
                 raise HTTPException(status_code=500, detail=f"Failed to parse output: {result.stdout}")
         
-        else:
-            # MobileNetV2 classification (mock for now)
+        elif model in ["mobilenetv2", "resnet50"]:
+            # Classification models - use resnet50_inference.py
             # Save uploaded image temporarily
             with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
                 tmp_file.write(content)
                 tmp_path = tmp_file.name
             
             try:
-                # Run basic usage to verify model works
+                # Get paths
+                models_dir = Path(__file__).parent.parent / "models"
+                inference_script = Path(__file__).parent.parent / "src" / "backends" / "resnet50_inference.py"
+                model_path = models_dir / f"{model}.onnx"
+                python_exe = Path(__file__).parent / "venv" / "bin" / "python3"
+                
+                # Map device
+                device_arg = "GPU" if device.lower() in ["gpu", "auto"] else "CPU"
+                
+                # Run inference
+                inference_start = time.time()
                 result = subprocess.run(
-                    [str(BASIC_USAGE_BIN)],
+                    [str(python_exe), str(inference_script), str(model_path), tmp_path, device_arg],
                     capture_output=True,
                     text=True,
                     timeout=10
                 )
+                latency_ms = (time.time() - inference_start) * 1000
                 
-                latency_ms = (time.time() - start_time) * 1000
+                if result.returncode != 0:
+                    raise HTTPException(status_code=500, detail=f"Inference failed: {result.stderr}")
                 
-                # Parse output to extract device used
-                device_used = "Unknown"
-                for line in result.stdout.split('\n'):
-                    if 'Device:' in line or 'providers:' in line:
-                        if 'CPU' in line:
-                            device_used = "CPU"
-                        elif 'OpenVINO' in line or 'GPU' in line:
-                            device_used = "GPU"
+                # Parse JSON output
+                output = json.loads(result.stdout)
                 
-                # Mock classification results
-                mock_results = {
-                    "top_5": [
-                        {"class": "tabby cat", "confidence": 0.842},
-                        {"class": "tiger cat", "confidence": 0.089},
-                        {"class": "Egyptian cat", "confidence": 0.043},
-                        {"class": "lynx", "confidence": 0.012},
-                        {"class": "window screen", "confidence": 0.007}
-                    ]
-                }
+                # Format device name
+                providers = output.get('providers', [])
+                device_used = "GPU (OpenVINO)" if "OpenVINOExecutionProvider" in providers else "CPU"
                 
                 return InferenceResult(
                     success=True,
                     latency_ms=round(latency_ms, 2),
                     device_used=device_used,
-                    results=mock_results
+                    results={
+                        "type": "classification",
+                        "predictions": output.get('predictions', [])[:5],  # Top 5
+                        "model": model
+                    }
                 )
                 
             finally:
                 # Cleanup temporary file
                 os.unlink(tmp_path)
+        
+        else:
+            # Unknown model
+            raise HTTPException(status_code=400, detail=f"Unsupported model: {model}")
             
     except subprocess.TimeoutExpired:
         raise HTTPException(status_code=504, detail="Inference timeout")

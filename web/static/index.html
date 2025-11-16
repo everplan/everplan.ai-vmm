@@ -893,18 +893,21 @@
                 document.getElementById('deviceUsed').textContent = result.device_used;
                 
                 const classificationsDiv = document.getElementById('classifications');
+                const detectionCanvas = document.getElementById('detectionCanvas');
                 
-                // Check if it's YOLOv8 detection results
-                if (result.results && result.results.detections) {
+                // Check result type and render accordingly
+                if (result.results && result.results.type === 'detection') {
+                    // Object Detection Results (YOLOv8, SSD)
                     const detections = result.results.detections;
                     
-                    // Draw bounding boxes on canvas
+                    // Show canvas, draw bounding boxes
+                    detectionCanvas.style.display = 'block';
                     drawDetections(detections);
                     
                     // Display detection list
                     if (detections.length > 0) {
                         classificationsDiv.innerHTML = `
-                            <h4 style="margin-bottom: 10px;">Detected Objects (${detections.length}):</h4>
+                            <h4 style="margin-bottom: 10px;">🎯 Detected Objects (${detections.length}):</h4>
                             ${detections.map(det => `
                                 <div class="result-item">
                                     <div>
@@ -921,10 +924,53 @@
                         classificationsDiv.innerHTML = '<p>No objects detected</p>';
                     }
                 } 
-                // Classification results (MobileNetV2)
-                else if (result.results && result.results.top_5) {
+                else if (result.results && result.results.type === 'classification') {
+                    // Image Classification Results (MobileNetV2, ResNet50)
+                    const predictions = result.results.predictions;
+                    
                     // Hide detection canvas
-                    document.getElementById('detectionCanvas').style.display = 'none';
+                    detectionCanvas.style.display = 'none';
+                    
+                    classificationsDiv.innerHTML = `
+                        <h4 style="margin-bottom: 10px;">📸 Top Predictions:</h4>
+                        ${predictions.map(item => `
+                            <div class="result-item">
+                                <div>
+                                    <strong>${item.class}</strong><br>
+                                    <small>${(item.confidence * 100).toFixed(1)}%</small>
+                                </div>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" style="width: ${item.confidence * 100}%"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    `;
+                }
+                // Legacy format fallback
+                else if (result.results && result.results.detections) {
+                    // Old detection format
+                    const detections = result.results.detections;
+                    detectionCanvas.style.display = 'block';
+                    drawDetections(detections);
+                    
+                    classificationsDiv.innerHTML = `
+                        <h4 style="margin-bottom: 10px;">Detected Objects (${detections.length}):</h4>
+                        ${detections.map(det => `
+                            <div class="result-item">
+                                <div>
+                                    <strong>${det.class_name}</strong><br>
+                                    <small>${(det.confidence * 100).toFixed(1)}%</small>
+                                </div>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" style="width: ${det.confidence * 100}%"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    `;
+                } 
+                else if (result.results && result.results.top_5) {
+                    // Old classification format
+                    detectionCanvas.style.display = 'none';
                     
                     classificationsDiv.innerHTML = result.results.top_5.map(item => `
                         <div class="result-item">
