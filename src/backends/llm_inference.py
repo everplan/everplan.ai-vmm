@@ -12,28 +12,110 @@ import sys
 from pathlib import Path
 from transformers import AutoTokenizer
 
+def get_llm_providers(device='CPU'):
+    """
+    Get optimal execution providers for LLM inference based on hardware
+    
+    Args:
+        device: 'CPU', 'GPU', 'intel_cpu', 'intel_gpu', 'nvidia_gpu', 'auto'
+        
+    Returns:
+        List of ONNX Runtime execution providers in priority order
+    """
+    device = device.upper()
+    
+    # Normalize device names
+    if device in ['GPU', 'INTEL_GPU', 'ARC']:
+        return [
+            ('OpenVINOExecutionProvider', {
+                'device_type': 'GPU',
+                'enable_dynamic_shapes': True,
+                'precision': 'FP16'  # FP16 faster on GPU
+            }),
+            'CPUExecutionProvider'  # Fallback
+        ]
+    
+    elif device in ['NVIDIA_GPU', 'CUDA']:
+        return [
+            ('TensorrtExecutionProvider', {
+                'trt_fp16_enable': True,
+                'trt_engine_cache_enable': True
+            }),
+            ('CUDAExecutionProvider', {
+                'device_id': 0
+            }),
+            'CPUExecutionProvider'
+        ]
+    
+    elif device in ['AMD_GPU', 'ROCM']:
+        return [
+            ('ROCMExecutionProvider', {
+                'device_id': 0
+            }),
+            'CPUExecutionProvider'
+        ]
+    
+    elif device == 'AUTO':
+        # Intelligent auto-selection based on available providers
+        available = ort.get_available_providers()
+        
+        if 'OpenVINOExecutionProvider' in available:
+            # Prefer OpenVINO GPU if available, else CPU
+            return ['OpenVINOExecutionProvider', 'CPUExecutionProvider']
+        elif 'TensorrtExecutionProvider' in available:
+            return ['TensorrtExecutionProvider', 'CUDAExecutionProvider', 'CPUExecutionProvider']
+        elif 'CUDAExecutionProvider' in available:
+            return ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        else:
+            return ['CPUExecutionProvider']
+    
+    else:  # CPU or default
+        return [
+            ('OpenVINOExecutionProvider', {
+                'device_type': 'CPU',
+                'enable_dynamic_shapes': True
+            }),
+            'CPUExecutionProvider'
+        ]
+
 class LLMInference:
     def __init__(self, model_path, tokenizer_path, device='CPU'):
-        """Initialize LLM inference session"""
+        """Initialize LLM inference session with multi-backend support"""
         self.device = device
         
         # Load tokenizer
         print(f"Loading tokenizer from {tokenizer_path}...", file=sys.stderr)
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
         
+        # Get optimal providers for this device
+        providers = get_llm_providers(device)
+        print(f"Requested device: {device}", file=sys.stderr)
+        print(f"Provider configuration: {providers}", file=sys.stderr)
+        
         # Set up ONNX Runtime session
         print(f"Loading model from {model_path}...", file=sys.stderr)
-        if device.upper() == 'GPU':
-            providers = ['OpenVINOExecutionProvider', 'CPUExecutionProvider']
-        else:
-            providers = ['CPUExecutionProvider']
-        
         self.session = ort.InferenceSession(str(model_path), providers=providers)
-        print(f"Model loaded. Providers: {self.session.get_providers()}", file=sys.stderr)
+        
+        actual_providers = self.session.get_providers()
+        print(f"Model loaded. Active providers: {actual_providers}", file=sys.stderr)
+        
+        # Log which backend is actually being used
+        if 'OpenVINOExecutionProvider' in actual_providers:
+            print(f"✓ Using OpenVINO backend (Intel optimized)", file=sys.stderr)
+        elif 'TensorrtExecutionProvider' in actual_providers:
+            print(f"✓ Using TensorRT backend (NVIDIA optimized)", file=sys.stderr)
+        elif 'CUDAExecutionProvider' in actual_providers:
+            print(f"✓ Using CUDA backend (NVIDIA)", file=sys.stderr)
+        elif 'ROCMExecutionProvider' in actual_providers:
+            print(f"✓ Using ROCm backend (AMD optimized)", file=sys.stderr)
+        else:
+            print(f"✓ Using CPU backend", file=sys.stderr)
         
         # Get input/output names
         self.input_names = [inp.name for inp in self.session.get_inputs()]
         self.output_names = [out.name for out in self.session.get_outputs()]
+        
+        print(f"Model inputs: {self.input_names[:3]}...", file=sys.stderr)  # Show first 3
         
     def generate(self, prompt, max_length=100, temperature=0.7, top_p=0.9, stream=False):
         """
