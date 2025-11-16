@@ -254,6 +254,47 @@
             color: #666;
         }
 
+        /* Comparison Table Styles */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .comparison-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .comparison-table td:first-child {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .check-mark {
+            color: #28a745;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .x-mark {
+            color: #dc3545;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .highlight-vmm {
+            background: linear-gradient(90deg, #f0f7ff 0%, #fff 100%);
+        }
+
         select {
             width: 100%;
             padding: 10px;
@@ -334,6 +375,47 @@
             background: #fff3cd;
             color: #856404;
         }
+
+        /* Why VMM Section */
+        .why-vmm-section {
+            display: none;
+            margin-top: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+        }
+
+        .why-vmm-section.active {
+            display: block;
+        }
+
+        .header-buttons {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .header-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .header-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .header-btn.active {
+            background: #28a745;
+        }
     </style>
 </head>
 <body>
@@ -341,6 +423,94 @@
         <div class="header">
             <h1>🚀 AI-VMM Dashboard</h1>
             <p>Heterogeneous AI Accelerator Manager - v0.1.0</p>
+            <div class="header-buttons">
+                <button class="header-btn" onclick="toggleWhyVMM()">
+                    🌟 Why AI-VMM?
+                </button>
+            </div>
+        </div>
+
+        <!-- Why VMM Section (collapsible) -->
+        <div id="whyVmmSection" class="card why-vmm-section">
+            <h2>🌟 Why AI-VMM?</h2>
+            <p style="margin-bottom: 20px; color: #555; font-size: 1.05em;">
+                AI-VMM is a <strong>universal AI accelerator abstraction layer</strong> - think "Kubernetes for AI hardware". 
+                Unlike specialized tools that focus on a single model type, VMM handles <strong>ALL AI workloads</strong> across heterogeneous hardware.
+            </p>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>AI Workload Type</th>
+                        <th>AI-VMM</th>
+                        <th>Ollama</th>
+                        <th>TensorRT</th>
+                        <th>OpenVINO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="highlight-vmm">
+                        <td>📸 Image Classification</td>
+                        <td><span class="check-mark">✓</span> MobileNetV2, ResNet50</td>
+                        <td><span class="x-mark">✗</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                    </tr>
+                    <tr class="highlight-vmm">
+                        <td>🎯 Object Detection</td>
+                        <td><span class="check-mark">✓</span> YOLOv8, SSD</td>
+                        <td><span class="x-mark">✗</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                    </tr>
+                    <tr class="highlight-vmm">
+                        <td>🎨 Image Segmentation</td>
+                        <td><span class="check-mark">✓</span> DeepLabV3 (planned)</td>
+                        <td><span class="x-mark">✗</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                    </tr>
+                    <tr class="highlight-vmm">
+                        <td>💬 Text Generation (LLMs)</td>
+                        <td><span class="check-mark">✓</span> Any ONNX LLM</td>
+                        <td><span class="check-mark">✓</span> Specialized</td>
+                        <td><span class="check-mark">✓</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                    </tr>
+                    <tr class="highlight-vmm">
+                        <td>🔊 Speech Recognition</td>
+                        <td><span class="check-mark">✓</span> Whisper (planned)</td>
+                        <td><span class="x-mark">✗</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                    </tr>
+                    <tr class="highlight-vmm">
+                        <td>🌐 Multi-Modal (Vision+Text)</td>
+                        <td><span class="check-mark">✓</span> CLIP (planned)</td>
+                        <td><span class="x-mark">✗</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                        <td><span class="check-mark">✓</span></td>
+                    </tr>
+                    <tr style="border-top: 2px solid #667eea;">
+                        <td><strong>Hardware Support</strong></td>
+                        <td><strong>Intel, NVIDIA, AMD</strong></td>
+                        <td>CPU/GPU generic</td>
+                        <td>NVIDIA only</td>
+                        <td>Intel only</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cross-Vendor Management</strong></td>
+                        <td><span class="check-mark">✓</span> Single API</td>
+                        <td><span class="x-mark">✗</span></td>
+                        <td><span class="x-mark">✗</span></td>
+                        <td><span class="x-mark">✗</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196F3;">
+                <strong>🎯 VMM's Unique Value:</strong> One unified platform for all AI workloads, abstracting hardware complexity while optimizing for each accelerator's strengths.
+            </div>
         </div>
 
         <!-- VMM Information Section -->
@@ -470,9 +640,26 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000';
+        // Use the same host/port as the page is loaded from
+        const API_BASE = window.location.origin;
         let selectedFile = null;
         let vmmInfoData = null;
+
+        // Toggle Why VMM section
+        function toggleWhyVMM() {
+            const section = document.getElementById('whyVmmSection');
+            const button = event.target;
+            
+            if (section.classList.contains('active')) {
+                section.classList.remove('active');
+                button.classList.remove('active');
+                button.textContent = '🌟 Why AI-VMM?';
+            } else {
+                section.classList.add('active');
+                button.classList.add('active');
+                button.textContent = '✖ Close';
+            }
+        }
 
         // Load hardware on page load
         document.addEventListener('DOMContentLoaded', () => {
