@@ -38,5 +38,16 @@
     "class_labels": "coco_classes.json",
     "description": "Single Shot Detector (28MB), efficient object localization",
     "use_case": "Alternative detection architecture, good for embedded devices"
+  },
+  "tinyllama_110m": {
+    "name": "TinyLlama-110M",
+    "type": "text-generation",
+    "task": "Text Generation",
+    "input_size": [2048],
+    "classes": 32000,
+    "class_labels": null,
+    "description": "Lightweight language model (106MB quantized), text generation and chat",
+    "use_case": "Conversational AI, text completion, question answering - like Ollama",
+    "status": "experimental"
   }
 }

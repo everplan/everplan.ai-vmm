@@ -24,12 +24,12 @@ A universal platform that:
 
 | Feature | AI-VMM | Ollama | TensorRT | OpenVINO |
 |---------|--------|--------|----------|----------|
-| **Image Classification** | ✓ | ✗ | ✓ | ✓ |
-| **Object Detection** | ✓ | ✗ | ✓ | ✓ |
-| **Segmentation** | ✓ | ✗ | ✓ | ✓ |
-| **Text Generation (LLMs)** | ✓ | ✓ Specialized | ✓ | ✓ |
-| **Speech Recognition** | ✓ | ✗ | ✓ | ✓ |
-| **Multi-Modal (Vision+Text)** | ✓ | ✗ | ✓ | ✓ |
+| **Image Classification** | ✓ MobileNetV2, ResNet50 | ✗ | ✓ | ✓ |
+| **Object Detection** | ✓ YOLOv8, SSD | ✗ | ✓ | ✓ |
+| **Segmentation** | ✓ Planned | ✗ | ✓ | ✓ |
+| **Text Generation (LLMs)** | ✓ TinyLlama (experimental) | ✓ Specialized | ✓ | ✓ |
+| **Speech Recognition** | ✓ Planned | ✗ | ✓ | ✓ |
+| **Multi-Modal (Vision+Text)** | ✓ Planned | ✗ | ✓ | ✓ |
 | **Hardware Support** | Intel, NVIDIA, AMD | Generic | NVIDIA only | Intel only |
 | **Cross-Vendor Management** | ✓ Single API | ✗ | ✗ | ✗ |
 
