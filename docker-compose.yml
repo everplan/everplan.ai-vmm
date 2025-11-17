@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # AI-VMM Core - Central orchestrator
+  ai-vmm-core:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    ports:
+      - "8080:8080"  # Main API
+      - "8000:8000"  # Web UI
+    volumes:
+      - ./models:/models:ro  # Shared model storage
+      - ./config:/config:ro
+    networks:
+      - ai-vmm-net
+    environment:
+      - INTEL_BACKEND_URL=http://intel-backend-gpu:8001
+      - INTEL_CPU_BACKEND_URL=http://intel-backend-cpu:8002
+      - NVIDIA_BACKEND_URL=http://nvidia-backend:8003
+    depends_on:
+      - intel-backend-gpu
+      - intel-backend-cpu
+    restart: unless-stopped
+
+  # Intel GPU Backend - IPEX-LLM for B580 GPUs
+  intel-backend-gpu:
+    image: intelanalytics/ipex-llm-serving-xpu:0.2.0-b2
+    container_name: ipex-llm-gpu
+    devices:
+      - /dev/dri:/dev/dri  # GPU access
+    volumes:
+      - ./models:/models:ro
+    ports:
+      - "8001:8000"  # Expose for direct access
+    networks:
+      - ai-vmm-net
+    environment:
+      - MODEL_PATH=TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      - SERVED_MODEL_NAME=tinyllama
+      - MAX_MODEL_LEN=2048
+      - MAX_NUM_SEQS=8
+      - LOAD_IN_LOW_BIT=sym_int4
+      - USE_XETLA=OFF  # For Arc GPUs
+      - SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=2
+      - SYCL_CACHE_PERSISTENT=1
+    shm_size: '16gb'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Intel CPU Backend - OpenVINO for CPU inference
+  intel-backend-cpu:
+    build:
+      context: ./docker/cpu-backend
+      dockerfile: Dockerfile
+    container_name: openvino-cpu
+    volumes:
+      - ./models:/models:ro
+      - model-cache:/root/.cache/huggingface  # Cache downloaded models
+    ports:
+      - "8002:8002"  # Expose for direct access
+    networks:
+      - ai-vmm-net
+    environment:
+      - MODEL_NAME=TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      - OV_NUM_STREAMS=AUTO  # OpenVINO CPU optimization
+      - KMP_BLOCKTIME=1
+      - KMP_SETTINGS=TRUE
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import requests; requests.get('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # NVIDIA Backend - vLLM with CUDA (if NVIDIA GPUs available)
+  # nvidia-backend:
+  #   image: vllm/vllm-openai:latest
+  #   runtime: nvidia
+  #   environment:
+  #     - CUDA_VISIBLE_DEVICES=0,1
+  #     - MODEL_PATH=/models/llama2-7b
+  #     - PORT=8002
+  #   volumes:
+  #     - ./models:/models:ro
+  #   networks:
+  #     - ai-vmm-net
+  #   shm_size: '16gb'
+  #   restart: unless-stopped
+
+  # Monitoring - Prometheus (optional)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus-data:/prometheus
+  #   networks:
+  #     - ai-vmm-net
+  #   ports:
+  #     - "9090:9090"
+
+  # Monitoring - Grafana (optional)
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   volumes:
+  #     - grafana-data:/var/lib/grafana
+  #   networks:
+  #     - ai-vmm-net
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+
+networks:
+  ai-vmm-net:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  model-cache:  # Shared model cache for CPU backend
