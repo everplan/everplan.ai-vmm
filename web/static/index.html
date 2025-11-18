@@ -562,7 +562,7 @@
                     <strong>AI-VMM supports ALL model types</strong> - not just LLMs like Ollama.
                     Test classification, detection, and more on heterogeneous hardware.
                 </p>
-                <select id="modelSelect">
+                <select id="modelSelect" onchange="handleModelChange()">
                     <optgroup label="📸 Image Classification">
                         <option value="mobilenetv2">MobileNetV2 (14MB) - Lightweight</option>
                         <option value="resnet50">ResNet50 (98MB) - High Accuracy</option>
@@ -571,31 +571,73 @@
                         <option value="yolov8n">YOLOv8n (13MB) - Real-time</option>
                         <option value="ssd_mobilenet">SSD MobileNet (28MB) - Alternative</option>
                     </optgroup>
+                    <optgroup label="💬 Text Generation (LLM)">
+                        <option value="tinyllama_110m">TinyLlama-110M (106MB) - Experimental</option>
+                    </optgroup>
                 </select>
                 <select id="deviceSelect">
-                    <option value="auto">Auto (VMM selects best)</option>
-                    <option value="cpu">CPU</option>
-                    <option value="gpu">GPU</option>
+                    <option value="auto">Auto (Intel Arc B580 GPU)</option>
+                    <option value="gpu">GPU (Intel Arc B580)</option>
+                    <option value="cpu">CPU (Coming Soon - OpenVINO Container)</option>
                 </select>
 
-                <label style="display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 600; color: #666;">
-                    📁 Or select example image:
-                </label>
-                <select id="exampleImageSelect" onchange="loadExampleImage()">
-                    <option value="">-- Select an example --</option>
-                    <option value="zidane.jpg">Soccer Players (zidane.jpg)</option>
-                    <option value="bus.jpg">Street Scene (bus.jpg)</option>
-                </select>
-                
-                <div class="upload-area" id="uploadArea" style="margin-top: 15px;">
-                    <p>📸 Click to upload image or drag & drop</p>
-                    <p style="color: #666; font-size: 0.9em; margin-top: 10px;">Supported: JPG, PNG</p>
-                    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                <!-- Image Inference Section -->
+                <div id="imageInferenceSection">
+                    <label style="display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 600; color: #666;">
+                        📁 Or select example image:
+                    </label>
+                    <select id="exampleImageSelect" onchange="loadExampleImage()">
+                        <option value="">-- Select an example --</option>
+                        <option value="zidane.jpg">Soccer Players (zidane.jpg)</option>
+                        <option value="bus.jpg">Street Scene (bus.jpg)</option>
+                    </select>
+                    
+                    <div class="upload-area" id="uploadArea" style="margin-top: 15px;">
+                        <p>📸 Click to upload image or drag & drop</p>
+                        <p style="color: #666; font-size: 0.9em; margin-top: 10px;">Supported: JPG, PNG</p>
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                    </div>
+                    
+                    <div style="position: relative; display: inline-block; margin-top: 15px;">
+                        <img id="preview" style="display: none; max-width: 100%; border-radius: 8px;">
+                        <canvas id="detectionCanvas" style="position: absolute; top: 0; left: 0; display: none; pointer-events: none;"></canvas>
+                    </div>
                 </div>
-                
-                <div style="position: relative; display: inline-block; margin-top: 15px;">
-                    <img id="preview" style="display: none; max-width: 100%; border-radius: 8px;">
-                    <canvas id="detectionCanvas" style="position: absolute; top: 0; left: 0; display: none; pointer-events: none;"></canvas>
+
+                <!-- Text Generation (LLM) Section -->
+                <div id="textGenerationSection" style="display: none;">
+                    <label style="display: block; margin-top: 15px; margin-bottom: 5px; font-weight: 600; color: #666;">
+                        💬 Enter your prompt:
+                    </label>
+                    <textarea id="textPrompt" 
+                              placeholder="What is the capital of France?"
+                              style="width: 100%; min-height: 100px; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-family: inherit; font-size: 0.95em; resize: vertical;"></textarea>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #666; font-size: 0.9em;">
+                                Max Tokens: <span id="maxTokensValue">50</span>
+                            </label>
+                            <input type="range" id="maxTokens" min="10" max="200" value="50" 
+                                   style="width: 100%;"
+                                   oninput="document.getElementById('maxTokensValue').textContent = this.value">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #666; font-size: 0.9em;">
+                                Temperature: <span id="temperatureValue">0.7</span>
+                            </label>
+                            <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" 
+                                   style="width: 100%;"
+                                   oninput="document.getElementById('temperatureValue').textContent = this.value">
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 6px; font-size: 0.85em;">
+                        <strong>💡 Example prompts:</strong><br>
+                        • "Explain quantum computing in simple terms"<br>
+                        • "Write a haiku about artificial intelligence"<br>
+                        • "What are the benefits of neural networks?"
+                    </div>
                 </div>
                 
                 <button class="btn" onclick="runInference()" id="inferBtn" style="margin-top: 15px; width: 100%;" disabled>
@@ -604,9 +646,13 @@
                 
                 <div class="results" id="results" style="display: none;">
                     <h3 style="margin-bottom: 15px;">Results</h3>
-                    <div style="background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 15px;" id="performanceMetrics">
                         <strong>Latency:</strong> <span id="latency">-</span> ms<br>
-                        <strong>Device:</strong> <span id="deviceUsed">-</span>
+                        <strong>Device:</strong> <span id="deviceUsed">-</span><br>
+                        <span id="tokenStats" style="display: none;">
+                            <strong>Tokens:</strong> <span id="tokenCount">-</span> 
+                            (<span id="tokensPerSec">-</span> tokens/sec)
+                        </span>
                     </div>
                     <div id="classifications"></div>
                 </div>
@@ -644,6 +690,49 @@
         const API_BASE = window.location.origin;
         let selectedFile = null;
         let vmmInfoData = null;
+        let currentModelType = 'classification';  // Track current model type
+
+        // Handle model selection change
+        function handleModelChange() {
+            const modelSelect = document.getElementById('modelSelect');
+            const selectedModel = modelSelect.value;
+            
+            // Fetch model metadata to determine type
+            fetch(`${API_BASE}/api/model-info/${selectedModel}`)
+                .then(response => response.json())
+                .then(modelInfo => {
+                    currentModelType = modelInfo.type;
+                    updateUIForModelType(modelInfo.type);
+                })
+                .catch(error => {
+                    console.error('Failed to fetch model info:', error);
+                    // Default to image inference
+                    currentModelType = 'classification';
+                    updateUIForModelType('classification');
+                });
+        }
+
+        // Update UI based on model type
+        function updateUIForModelType(modelType) {
+            const imageSection = document.getElementById('imageInferenceSection');
+            const textSection = document.getElementById('textGenerationSection');
+            const inferBtn = document.getElementById('inferBtn');
+            const textPrompt = document.getElementById('textPrompt');
+            
+            if (modelType === 'text-generation') {
+                // Show text generation UI, hide image UI
+                imageSection.style.display = 'none';
+                textSection.style.display = 'block';
+                inferBtn.textContent = 'Generate Text';
+                inferBtn.disabled = false;  // Always enabled for text
+            } else {
+                // Show image UI, hide text generation UI
+                imageSection.style.display = 'block';
+                textSection.style.display = 'none';
+                inferBtn.textContent = 'Run Inference';
+                inferBtn.disabled = !selectedFile;  // Only enabled if image uploaded
+            }
+        }
 
         // Toggle Why VMM section
         function toggleWhyVMM() {
@@ -850,6 +939,112 @@
             }
         }
 
+        function displayResults(result) {
+            const resultsDiv = document.getElementById('results');
+            const classificationsDiv = document.getElementById('classifications');
+            const detectionCanvas = document.getElementById('detectionCanvas');
+            const tokenStatsSpan = document.getElementById('tokenStats');
+            
+            // Update latency and device - handle both formats
+            if (result.latency_ms !== undefined) {
+                document.getElementById('latency').textContent = result.latency_ms.toFixed(2);
+            } else if (result.results && result.results.metadata && result.results.metadata.generation_time_ms) {
+                // Chat completion format
+                document.getElementById('latency').textContent = result.results.metadata.generation_time_ms.toFixed(2);
+            }
+            
+            if (result.device_used) {
+                document.getElementById('deviceUsed').textContent = result.device_used;
+                tokenStatsSpan.style.display = 'none';  // Hide token stats for image inference
+            } else if (result.results && result.results.metadata && result.results.metadata.backend) {
+                // Chat completion format
+                document.getElementById('deviceUsed').textContent = result.results.metadata.backend;
+                
+                // Show token statistics
+                if (result.results.metadata.completion_tokens !== undefined) {
+                    tokenStatsSpan.style.display = 'inline';
+                    document.getElementById('tokenCount').textContent = result.results.metadata.completion_tokens;
+                    document.getElementById('tokensPerSec').textContent = result.results.metadata.tokens_per_sec.toFixed(1);
+                }
+            }
+            
+            // Check result type and render accordingly
+            if (result.results && result.results.type === 'text-generation') {
+                // Text Generation Results (TinyLlama)
+                const generatedText = result.results.text;
+                const metadata = result.results.metadata || {};
+                
+                // Hide detection canvas
+                detectionCanvas.style.display = 'none';
+                
+                classificationsDiv.innerHTML = `
+                    <h4 style="margin-bottom: 10px;">💬 Generated Text:</h4>
+                    <div style="background: #f5f5f5; border-left: 3px solid #0066cc; padding: 15px; border-radius: 4px; margin-bottom: 15px;">
+                        <p style="margin: 0; white-space: pre-wrap; font-family: 'Segoe UI', sans-serif; line-height: 1.6;">${generatedText}</p>
+                    </div>
+                    ${metadata.tokens_generated ? `
+                        <div style="font-size: 0.9em; color: #666;">
+                            <strong>Performance:</strong> ${metadata.tokens_generated} tokens in ${metadata.generation_time_ms}ms 
+                            (${metadata.tokens_per_sec?.toFixed(1)} tokens/sec)
+                        </div>
+                    ` : ''}
+                `;
+            }
+            else if (result.results && result.results.type === 'detection') {
+                // Object Detection Results (YOLOv8, SSD)
+                const detections = result.results.detections;
+                
+                // Show canvas, draw bounding boxes
+                detectionCanvas.style.display = 'block';
+                drawDetections(detections);
+                
+                // Display detection list
+                if (detections.length > 0) {
+                    classificationsDiv.innerHTML = `
+                        <h4 style="margin-bottom: 10px;">🎯 Detected Objects (${detections.length}):</h4>
+                        ${detections.map(det => `
+                            <div class="result-item">
+                                <div>
+                                    <strong>${det.class_name}</strong><br>
+                                    <small>${(det.confidence * 100).toFixed(1)}%</small>
+                                </div>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" style="width: ${det.confidence * 100}%"></div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    classificationsDiv.innerHTML = '<p>No objects detected</p>';
+                }
+            } 
+            else if (result.results && result.results.type === 'classification') {
+                // Image Classification Results (MobileNetV2, ResNet50)
+                const predictions = result.results.predictions;
+                
+                // Hide detection canvas
+                detectionCanvas.style.display = 'none';
+                
+                classificationsDiv.innerHTML = `
+                    <h4 style="margin-bottom: 10px;">📸 Top Predictions:</h4>
+                    ${predictions.map(item => `
+                        <div class="result-item">
+                            <div>
+                                <strong>${item.class}</strong><br>
+                                <small>${(item.confidence * 100).toFixed(1)}%</small>
+                            </div>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: ${item.confidence * 100}%"></div>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+            }
+            
+            // Show results div
+            resultsDiv.style.display = 'block';
+        }
+
         async function loadStats() {
             try {
                 const response = await fetch(`${API_BASE}/api/stats`);
@@ -866,10 +1061,127 @@
         }
 
         async function runInference() {
-            if (!selectedFile) return;
-            
             const btn = document.getElementById('inferBtn');
             const resultsDiv = document.getElementById('results');
+            
+            // Check if text generation or image inference
+            if (currentModelType === 'text-generation') {
+                const prompt = document.getElementById('textPrompt').value.trim();
+                if (!prompt) {
+                    alert('Please enter a text prompt');
+                    return;
+                }
+                
+                const maxTokens = parseInt(document.getElementById('maxTokens').value);
+                const temperature = parseFloat(document.getElementById('temperature').value);
+                const selectedModel = document.getElementById('modelSelect').value;
+                const selectedDevice = document.getElementById('deviceSelect').value;
+                
+                // Determine which backend to use based on device selection
+                const useGPU = selectedDevice === 'gpu' || selectedDevice === 'auto';
+                
+                btn.disabled = true;
+                btn.innerHTML = `<span class="loading"></span> Generating on ${useGPU ? 'Intel Arc B580 GPU' : 'CPU'}...`;
+                resultsDiv.style.display = 'none';
+                
+                try {
+                    let response;
+                    
+                    if (useGPU) {
+                        // Use the IPEX-LLM container endpoint (GPU - Intel Arc B580)
+                        response = await fetch(`${API_BASE}/api/chat/completions`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                messages: [
+                                    { role: 'user', content: prompt }
+                                ],
+                                max_tokens: maxTokens,
+                                temperature: temperature,
+                                model: 'tinyllama'  // Using IPEX-LLM container model
+                            })
+                        });
+                    } else {
+                        // CPU mode - show info and fall back to GPU
+                        const useGPUInstead = confirm(
+                            '⚠️ CPU Mode Limitation\n\n' +
+                            'CPU-only inference is currently limited due to Intel Arc B580 driver compatibility.\n\n' +
+                            'For best performance, we recommend GPU mode (Intel Arc B580 with IPEX-LLM).\n\n' +
+                            'Click OK to use GPU instead (recommended), or Cancel to try CPU anyway.'
+                        );
+                        
+                        if (useGPUInstead) {
+                            // User chose to use GPU instead
+                            btn.innerHTML = '<span class="loading"></span> Generating on Intel Arc B580 GPU...';
+                            response = await fetch(`${API_BASE}/api/chat/completions`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    messages: [
+                                        { role: 'user', content: prompt }
+                                    ],
+                                    max_tokens: maxTokens,
+                                    temperature: temperature,
+                                    model: 'tinyllama'
+                                })
+                            });
+                        } else {
+                            // User wants to try CPU anyway
+                            response = await fetch(`${API_BASE}/api/generate`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    prompt: prompt,
+                                    max_tokens: maxTokens,
+                                    temperature: temperature,
+                                    model: selectedModel,
+                                    device: 'CPU'
+                                })
+                            });
+                        }
+                    }
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Generation failed');
+                    }
+                    
+                    const result = await response.json();
+                    
+                    // Convert chat completion format to text generation format for display if needed
+                    let displayResult;
+                    if (useGPU && result.results && result.results.type === 'chat-completion') {
+                        displayResult = {
+                            results: {
+                                type: 'text-generation',
+                                text: result.results.message,
+                                metadata: result.results.metadata
+                            }
+                        };
+                    } else {
+                        displayResult = result;
+                    }
+                    
+                    // Display results (handled in displayResults function)
+                    displayResults(displayResult);
+                    
+                } catch (error) {
+                    alert('Text generation failed: ' + error.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Generate Text';
+                }
+                return;
+            }
+            
+            // Image inference (existing code)
+            if (!selectedFile) return;
             
             btn.disabled = true;
             btn.innerHTML = '<span class="loading"></span> Running...';
@@ -888,104 +1200,8 @@
                 
                 const result = await response.json();
                 
-                // Display results
-                document.getElementById('latency').textContent = result.latency_ms.toFixed(2);
-                document.getElementById('deviceUsed').textContent = result.device_used;
-                
-                const classificationsDiv = document.getElementById('classifications');
-                const detectionCanvas = document.getElementById('detectionCanvas');
-                
-                // Check result type and render accordingly
-                if (result.results && result.results.type === 'detection') {
-                    // Object Detection Results (YOLOv8, SSD)
-                    const detections = result.results.detections;
-                    
-                    // Show canvas, draw bounding boxes
-                    detectionCanvas.style.display = 'block';
-                    drawDetections(detections);
-                    
-                    // Display detection list
-                    if (detections.length > 0) {
-                        classificationsDiv.innerHTML = `
-                            <h4 style="margin-bottom: 10px;">🎯 Detected Objects (${detections.length}):</h4>
-                            ${detections.map(det => `
-                                <div class="result-item">
-                                    <div>
-                                        <strong>${det.class_name}</strong><br>
-                                        <small>${(det.confidence * 100).toFixed(1)}%</small>
-                                    </div>
-                                    <div class="confidence-bar">
-                                        <div class="confidence-fill" style="width: ${det.confidence * 100}%"></div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        `;
-                    } else {
-                        classificationsDiv.innerHTML = '<p>No objects detected</p>';
-                    }
-                } 
-                else if (result.results && result.results.type === 'classification') {
-                    // Image Classification Results (MobileNetV2, ResNet50)
-                    const predictions = result.results.predictions;
-                    
-                    // Hide detection canvas
-                    detectionCanvas.style.display = 'none';
-                    
-                    classificationsDiv.innerHTML = `
-                        <h4 style="margin-bottom: 10px;">📸 Top Predictions:</h4>
-                        ${predictions.map(item => `
-                            <div class="result-item">
-                                <div>
-                                    <strong>${item.class}</strong><br>
-                                    <small>${(item.confidence * 100).toFixed(1)}%</small>
-                                </div>
-                                <div class="confidence-bar">
-                                    <div class="confidence-fill" style="width: ${item.confidence * 100}%"></div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    `;
-                }
-                // Legacy format fallback
-                else if (result.results && result.results.detections) {
-                    // Old detection format
-                    const detections = result.results.detections;
-                    detectionCanvas.style.display = 'block';
-                    drawDetections(detections);
-                    
-                    classificationsDiv.innerHTML = `
-                        <h4 style="margin-bottom: 10px;">Detected Objects (${detections.length}):</h4>
-                        ${detections.map(det => `
-                            <div class="result-item">
-                                <div>
-                                    <strong>${det.class_name}</strong><br>
-                                    <small>${(det.confidence * 100).toFixed(1)}%</small>
-                                </div>
-                                <div class="confidence-bar">
-                                    <div class="confidence-fill" style="width: ${det.confidence * 100}%"></div>
-                                </div>
-                            </div>
-                        `).join('')}
-                    `;
-                } 
-                else if (result.results && result.results.top_5) {
-                    // Old classification format
-                    detectionCanvas.style.display = 'none';
-                    
-                    classificationsDiv.innerHTML = result.results.top_5.map(item => `
-                        <div class="result-item">
-                            <div>
-                                <strong>${item.class}</strong><br>
-                                <small>${(item.confidence * 100).toFixed(1)}%</small>
-                            </div>
-                            <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: ${item.confidence * 100}%"></div>
-                            </div>
-                        </div>
-                    `).join('');
-                }
-                
-                resultsDiv.style.display = 'block';
+                // Display results using shared function
+                displayResults(result);
                 
             } catch (error) {
                 alert('Inference failed: ' + error.message);

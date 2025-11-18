@@ -102,3 +102,31 @@ docs/_build/
 *.tar.gz
 *.zip
 *.rar
+# Model files (too large for git)
+*.onnx
+*.bin
+*.xml
+*.pt
+*.pth
+models/*/
+
+# Python virtual environments
+venv/
+web/venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Docker volumes and data
+docker-data/
+.env
+
+# Tokenizer files (regenerated from HuggingFace)
+tokenizer.json
+special_tokens_map.json
+tokenizer_config.json
+
+# Logs and temp files
+*.log
+/tmp/
+.cache/

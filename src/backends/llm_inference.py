@@ -129,8 +129,89 @@ class LLMInference:
             stream: Whether to yield tokens as generated
             
         Returns:
-            Generated text or generator if stream=True
+            Generated text dict (or generator if stream=True)
         """
+        if stream:
+            return self._generate_stream(prompt, max_length, temperature, top_p)
+        else:
+            return self._generate_complete(prompt, max_length, temperature, top_p)
+    
+    def _generate_complete(self, prompt, max_length, temperature, top_p):
+        """Generate complete text (non-streaming)"""
+        # Tokenize input
+        input_ids = self.tokenizer.encode(prompt, return_tensors='np')
+        
+        if isinstance(input_ids, list):
+            input_ids = np.array([input_ids])
+        
+        start_time = time.time()
+        generated_tokens = []
+        first_token_time = None
+        
+        for i in range(max_length):
+            # Prepare inputs
+            inputs = {
+                'input_ids': input_ids.astype(np.int64)
+            }
+            
+            # Run inference
+            outputs = self.session.run(self.output_names, inputs)
+            
+            # Get logits for next token
+            logits = outputs[0][0, -1, :]  # Last token logits
+            
+            # Apply temperature
+            logits = logits / temperature
+            
+            # Apply softmax
+            probs = np.exp(logits) / np.sum(np.exp(logits))
+            
+            # Top-p (nucleus) sampling
+            sorted_indices = np.argsort(probs)[::-1]
+            sorted_probs = probs[sorted_indices]
+            cumulative_probs = np.cumsum(sorted_probs)
+            
+            # Find cutoff index for top_p
+            cutoff_index = np.searchsorted(cumulative_probs, top_p)
+            top_indices = sorted_indices[:cutoff_index+1]
+            top_probs = probs[top_indices]
+            top_probs = top_probs / np.sum(top_probs)  # Renormalize
+            
+            # Sample from top-p distribution
+            next_token = np.random.choice(top_indices, p=top_probs)
+            
+            if first_token_time is None:
+                first_token_time = time.time()
+            
+            # Check for end of sequence
+            if next_token == self.tokenizer.eos_token_id:
+                break
+            
+            generated_tokens.append(next_token)
+            
+            # Append token to input for next iteration
+            input_ids = np.concatenate([input_ids, [[next_token]]], axis=1)
+        
+        # Calculate metrics
+        total_time = time.time() - start_time
+        tokens_per_sec = len(generated_tokens) / total_time if total_time > 0 else 0
+        time_to_first_token = (first_token_time - start_time) * 1000 if first_token_time else 0
+        
+        # Decode full text
+        generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        
+        return {
+            'text': generated_text,
+            'tokens_generated': len(generated_tokens),
+            'total_time_sec': total_time,
+            'tokens_per_sec': tokens_per_sec,
+            'time_to_first_token_ms': time_to_first_token,
+            'providers': self.session.get_providers(),
+            'device': self.device
+        }
+    
+    def _generate_stream(self, prompt, max_length, temperature, top_p):
+        """Generate text with streaming (yields tokens as they're generated)"""
         # Tokenize input
         input_ids = self.tokenizer.encode(prompt, return_tensors='np')
         
@@ -179,52 +260,56 @@ class LLMInference:
             
             generated_tokens.append(next_token)
             
-            # Decode and yield if streaming
-            if stream:
-                token_text = self.tokenizer.decode([next_token])
-                yield token_text
+            # Decode and yield token
+            token_text = self.tokenizer.decode([next_token])
+            yield token_text
             
             # Append token to input for next iteration
             input_ids = np.concatenate([input_ids, [[next_token]]], axis=1)
-        
-        # Calculate metrics
-        total_time = time.time() - start_time
-        tokens_per_sec = len(generated_tokens) / total_time if total_time > 0 else 0
-        time_to_first_token = (first_token_time - start_time) * 1000 if first_token_time else 0
-        
-        # Decode full text
-        generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-        
-        if not stream:
-            return {
-                'text': generated_text,
-                'tokens_generated': len(generated_tokens),
-                'total_time_sec': total_time,
-                'tokens_per_sec': tokens_per_sec,
-                'time_to_first_token_ms': time_to_first_token,
-                'providers': self.session.get_providers(),
-                'device': self.device
-            }
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python llm_inference.py <model_path> <tokenizer_path> [prompt] [device] [max_length]")
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Run LLM inference with ONNX Runtime')
+    parser.add_argument('--model', required=True, help='Path to ONNX model file')
+    parser.add_argument('--prompt', required=True, help='Text prompt for generation')
+    parser.add_argument('--max-tokens', type=int, default=50, help='Maximum tokens to generate')
+    parser.add_argument('--temperature', type=float, default=1.0, help='Sampling temperature')
+    parser.add_argument('--top-p', type=float, default=0.9, help='Top-p (nucleus) sampling')
+    parser.add_argument('--device', default='CPU', choices=['CPU', 'GPU', 'auto'], 
+                       help='Device to run inference on')
+    
+    args = parser.parse_args()
+    
+    # Determine tokenizer path (assume it's in the same directory as model)
+    model_path = Path(args.model)
+    tokenizer_path = model_path.parent
+    
+    if not model_path.exists():
+        print(json.dumps({'error': f'Model not found: {model_path}'}))
         sys.exit(1)
     
-    model_path = sys.argv[1]
-    tokenizer_path = sys.argv[2]
-    prompt = sys.argv[3] if len(sys.argv) > 3 else "The capital of France is"
-    device = sys.argv[4] if len(sys.argv) > 4 else 'CPU'
-    max_length = int(sys.argv[5]) if len(sys.argv) > 5 else 50
-    
     # Initialize model
-    llm = LLMInference(model_path, tokenizer_path, device=device)
+    try:
+        llm = LLMInference(str(model_path), str(tokenizer_path), device=args.device)
+    except Exception as e:
+        print(json.dumps({'error': f'Failed to load model: {str(e)}'}))
+        sys.exit(1)
     
     # Generate text
-    result = llm.generate(prompt, max_length=max_length)
-    
-    # Output JSON result
-    print(json.dumps(result, indent=2))
+    try:
+        result = llm.generate(
+            args.prompt, 
+            max_length=args.max_tokens,
+            temperature=args.temperature,
+            top_p=args.top_p
+        )
+        
+        # Output JSON result
+        print(json.dumps(result, indent=2))
+    except Exception as e:
+        print(json.dumps({'error': f'Generation failed: {str(e)}'}))
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

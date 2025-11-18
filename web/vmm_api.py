@@ -46,6 +46,10 @@ BASIC_USAGE_BIN = VMM_BUILD_DIR / "examples/basic_usage/ai_vmm_basic_example"
 PERF_BENCHMARK_BIN = VMM_BUILD_DIR / "examples/performance_comparison/ai_vmm_performance_comparison"
 MODELS_DIR = Path("/root/everplan.ai-vmm/models")
 
+# Backend URLs - can be configured via environment variables
+INTEL_GPU_BACKEND_URL = os.getenv("INTEL_GPU_BACKEND_URL", "http://localhost:8001")
+INTEL_CPU_BACKEND_URL = os.getenv("INTEL_CPU_BACKEND_URL", "http://localhost:8002")
+
 # Global persistent inference server process
 _yolov8_server = None
 _yolov8_server_lock = None
@@ -476,6 +480,227 @@ async def run_inference(
         raise HTTPException(status_code=504, detail="Inference timeout")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
+
+
+class GenerateRequest(BaseModel):
+    prompt: str
+    max_tokens: int = 50
+    temperature: float = 0.7
+    model: str = "tinyllama_110m"
+    device: str = "auto"
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatCompletionRequest(BaseModel):
+    messages: List[ChatMessage]
+    model: str = "tinyllama"
+    max_tokens: int = 150
+    temperature: float = 0.7
+    stream: bool = False
+    device: str = "gpu"  # "cpu" or "gpu"
+
+
+@app.post("/api/generate")
+async def generate_text(request: GenerateRequest):
+    """
+    Generate text using LLM
+    
+    - **prompt**: Input text prompt
+    - **max_tokens**: Maximum tokens to generate (default: 50)
+    - **temperature**: Sampling temperature 0-2 (default: 0.7)
+    - **model**: LLM model to use (default: tinyllama_110m)
+    - **device**: Target device (cpu, gpu, auto)
+    """
+    start_time = time.time()
+    
+    try:
+        # Use the LLM inference backend (Optimum Intel with OpenVINO)
+        llm_script = Path(__file__).parent.parent / "src" / "backends" / "llm_openvino.py"
+        
+        if not llm_script.exists():
+            raise HTTPException(status_code=500, detail="LLM inference backend not found")
+        
+        # Prepare arguments
+        model_path = MODELS_DIR / "tinyllama_openvino"  # OpenVINO IR format directory
+        if not model_path.exists():
+            raise HTTPException(status_code=404, detail=f"Model not found: {model_path}")
+        
+        # Map device to OpenVINO device
+        device_arg = "GPU" if request.device.lower() in ["gpu", "intel_gpu"] else "CPU"
+        
+        # Run LLM inference
+        cmd = [
+            "python3",
+            str(llm_script),
+            "--model", str(model_path),
+            "--prompt", request.prompt,
+            "--max-tokens", str(request.max_tokens),
+            "--temperature", str(request.temperature),
+            "--device", device_arg
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60  # 60s timeout for text generation
+        )
+        
+        if result.returncode != 0:
+            error_msg = result.stderr or "Unknown error"
+            raise HTTPException(status_code=500, detail=f"Generation failed: {error_msg}")
+        
+        # Parse output
+        output = result.stdout.strip()
+        
+        # Try to parse as JSON (backend outputs structured data)
+        try:
+            # Find the JSON part (might have stderr messages before it)
+            json_start = output.find('{')
+            if json_start >= 0:
+                json_str = output[json_start:]
+                response_data = json.loads(json_str)
+            else:
+                response_data = json.loads(output)
+            
+            generated_text = response_data.get("text", "")
+            tokens_generated = response_data.get("tokens_generated", len(generated_text.split()))
+            tokens_per_sec = response_data.get("tokens_per_sec", 0)
+            backend = response_data.get("backend", "Unknown")
+            
+        except json.JSONDecodeError:
+            # Fallback: treat entire output as generated text
+            generated_text = output
+            tokens_generated = len(generated_text.split())
+            tokens_per_sec = 0
+            backend = "Unknown"
+        
+        inference_time = (time.time() - start_time) * 1000  # Convert to ms
+        
+        return {
+            "results": {
+                "type": "text-generation",
+                "text": generated_text,
+                "metadata": {
+                    "generation_time_ms": round(inference_time, 2),
+                    "tokens_generated": tokens_generated,
+                    "tokens_per_sec": tokens_per_sec,
+                    "backend": backend,
+                    "model": request.model,
+                    "device": request.device,
+                    "temperature": request.temperature,
+                    "max_tokens": request.max_tokens
+                }
+            }
+        }
+        
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Text generation timeout")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Text generation failed: {str(e)}")
+
+
+@app.post("/api/chat/completions")
+async def chat_completions(request: ChatCompletionRequest):
+    """
+    OpenAI-compatible chat completions endpoint - routes to CPU or GPU backend
+    
+    - **messages**: List of chat messages with role and content
+    - **model**: Model name (default: tinyllama)
+    - **max_tokens**: Maximum tokens to generate (default: 150)
+    - **temperature**: Sampling temperature 0-2 (default: 0.7)
+    - **device**: Target device - "cpu" or "gpu" (default: "gpu")
+    - **stream**: Stream response (not yet implemented)
+    """
+    import httpx
+    
+    start_time = time.time()
+    
+    try:
+        # Route to appropriate backend based on device selection
+        if request.device.lower() == "cpu":
+            backend_url = f"{INTEL_CPU_BACKEND_URL}/v1/chat/completions"
+            backend_name = "OpenVINO CPU"
+        else:  # gpu or auto
+            backend_url = f"{INTEL_GPU_BACKEND_URL}/v1/chat/completions"
+            backend_name = "IPEX-LLM vLLM (Intel Arc B580)"
+        
+        # Convert our request format to OpenAI format
+        payload = {
+            "model": request.model,
+            "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "stream": request.stream
+        }
+        
+        # Make request to backend container
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(backend_url, json=payload)
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"{backend_name} server error: {response.text}"
+                )
+            
+            llm_response = response.json()
+        
+        # Extract response
+        if "choices" in llm_response and len(llm_response["choices"]) > 0:
+            message_content = llm_response["choices"][0]["message"]["content"]
+            finish_reason = llm_response["choices"][0].get("finish_reason", "stop")
+        else:
+            raise HTTPException(status_code=500, detail="Invalid response from LLM server")
+        
+        # Get token usage (handle both formats)
+        usage = llm_response.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+        
+        # Get backend metadata if available
+        backend_metadata = llm_response.get("metadata", {})
+        backend_tokens_per_sec = backend_metadata.get("tokens_per_sec", 0)
+        
+        inference_time = (time.time() - start_time) * 1000  # Convert to ms
+        tokens_per_sec = backend_tokens_per_sec if backend_tokens_per_sec > 0 else (
+            completion_tokens / (inference_time / 1000) if inference_time > 0 else 0
+        )
+        
+        return {
+            "results": {
+                "type": "chat-completion",
+                "message": message_content,
+                "finish_reason": finish_reason,
+                "metadata": {
+                    "generation_time_ms": round(inference_time, 2),
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                    "tokens_per_sec": round(tokens_per_sec, 2),
+                    "backend": backend_name,
+                    "model": request.model,
+                    "temperature": request.temperature,
+                    "max_tokens": request.max_tokens,
+                    "device": request.device
+                }
+            }
+        }
+        
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{backend_name} server not available. Is the Docker container running?"
+        )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="LLM request timeout")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat completion failed: {str(e)}")
 
 
 @app.post("/api/benchmark")

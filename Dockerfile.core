@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages
+COPY web/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy AI-VMM core code
+COPY web/ ./web/
+COPY src/ ./src/
+COPY include/ ./include/
+
+# Expose ports
+EXPOSE 8080 8000
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV AI_VMM_MODE=container
+
+# Start AI-VMM API server
+CMD ["python", "web/vmm_api.py"]
