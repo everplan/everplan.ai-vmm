@@ -108,7 +108,17 @@ docs/_build/
 *.xml
 *.pt
 *.pth
-models/*/
+*.safetensors
+*.h5
+*.pb
+*.tflite
+models/*.onnx
+models/*.bin
+
+# But keep model config and metadata files
+!models/*.json
+!models/*.md
+!models/*.txt
 
 # Python virtual environments
 venv/
@@ -121,10 +131,11 @@ __pycache__/
 docker-data/
 .env
 
-# Tokenizer files (regenerated from HuggingFace)
-tokenizer.json
-special_tokens_map.json
-tokenizer_config.json
+# Tokenizer files in subdirectories (large, regenerated from HuggingFace)
+models/*/tokenizer.json
+models/*/tokenizer.model
+models/*/vocab.txt
+models/*/merges.txt
 
 # Logs and temp files
 *.log
