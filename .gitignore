@@ -102,23 +102,30 @@ docs/_build/
 *.tar.gz
 *.zip
 *.rar
-# Model files (too large for git)
-*.onnx
-*.bin
-*.xml
-*.pt
-*.pth
-*.safetensors
-*.h5
-*.pb
-*.tflite
+# Model files (large binaries)
 models/*.onnx
 models/*.bin
+models/*.xml
+models/*.pb
+models/*.pth
+models/*.pt
+models/*.h5
+models/*.tflite
+models/*.caffemodel
+models/*.mlmodel
+models/**/openvino_model.bin
+models/**/openvino_model.xml
 
-# But keep model config and metadata files
+# Keep configuration and metadata
 !models/*.json
-!models/*.md
 !models/*.txt
+!models/*.md
+!models/README.md
+!models/**/config.json
+!models/**/tokenizer*.json
+!models/**/generation_config.json
+!models/**/special_tokens_map.json
+!models/**/*.jinja
 
 # Python virtual environments
 venv/
