@@ -102,7 +102,7 @@ docs/_build/
 *.tar.gz
 *.zip
 *.rar
-# Model files (large binaries)
+# Model files and directories (large binaries)
 models/*.onnx
 models/*.bin
 models/*.xml
@@ -115,9 +115,22 @@ models/*.caffemodel
 models/*.mlmodel
 models/**/openvino_model.bin
 models/**/openvino_model.xml
+models/tinyllama_openvino/
+models_backup/
+scripts/models/
+
+# Model cache directories
+.cache/
+__pycache__/
+
+# Downloaded models and temporary files
+*.tar.gz
+*.safetensors
 
 # Keep configuration and metadata
 !models/*.json
+!models/**/config.json
+!models/**/tokenizer_config.json
 !models/*.txt
 !models/*.md
 !models/README.md
